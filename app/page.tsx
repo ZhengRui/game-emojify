@@ -177,17 +177,17 @@ export default function HomePage() {
     return canvasElement.toDataURL("image/jpeg", CAPTURE_IMAGE_QUALITY);
   }, []);
 
-const callJudge = useCallback(async (image: string, emoji: EmojiPrompt, roundId: string): Promise<JudgeApiResponse> => {
-  const response = await fetch("/api/judge", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      roundId,
-      emoji: emoji.symbol,
-      description: `${emoji.name}: ${emoji.description}`,
-      image,
-    }),
-  });
+  const callJudge = useCallback(async (image: string, emoji: EmojiPrompt, roundId: string): Promise<JudgeApiResponse> => {
+    const response = await fetch("/api/judge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        roundId,
+        emoji: emoji.symbol,
+        description: `${emoji.name}: ${emoji.description}`,
+        image,
+      }),
+    });
 
   const result = (await response.json()) as Partial<JudgeApiResponse> & { status?: string };
 
@@ -506,7 +506,7 @@ const callJudge = useCallback(async (image: string, emoji: EmojiPrompt, roundId:
       </section>
 
       <section className="emoji-panel">
-        <h1>Emoji Prompt</h1>
+        <h1>{currentEmoji.name}</h1>
         <div className="emoji-display" aria-label={currentEmoji.name} role="img">
           {currentEmoji.symbol}
         </div>

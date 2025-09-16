@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         confidence: 0,
         score: 0,
       },
-      { status: 200 },
+      { status: 200 }
     );
   }
 
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
       payload.roundId ?? "n/a",
       payload.emoji,
       result.verdict,
-      result.confidence.toFixed(2),
+      result.confidence.toFixed(2)
     );
 
     return NextResponse.json(result, { status: 200 });
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         confidence: 0,
         score: 0,
       },
-      { status: 200 },
+      { status: 200 }
     );
   }
 }
@@ -114,7 +114,10 @@ async function parseIncomingPayload(req: Request): Promise<ParsedPayload> {
       return normalisePayload({ emoji, description, image: dataUrl, roundId });
     }
 
-    return { ok: false, error: "Unsupported content type. Use JSON or multipart form data." };
+    return {
+      ok: false,
+      error: "Unsupported content type. Use JSON or multipart form data.",
+    };
   } catch (error) {
     console.error("[judge] Failed to parse payload", error);
     return { ok: false, error: "Invalid request payload." };
@@ -123,7 +126,8 @@ async function parseIncomingPayload(req: Request): Promise<ParsedPayload> {
 
 function normalisePayload(data: Record<string, unknown>): ParsedPayload {
   const emoji = typeof data.emoji === "string" ? data.emoji : "";
-  const description = typeof data.description === "string" ? data.description : undefined;
+  const description =
+    typeof data.description === "string" ? data.description : undefined;
   const roundId = typeof data.roundId === "string" ? data.roundId : undefined;
   const image = typeof data.image === "string" ? data.image : null;
 
@@ -162,7 +166,10 @@ async function callExternalJudge(payload: JudgePayload): Promise<JudgeVerdict> {
   return callGeminiJudge(payload, apiKey);
 }
 
-async function callGeminiJudge(payload: JudgePayload, apiKey: string): Promise<JudgeVerdict> {
+async function callGeminiJudge(
+  payload: JudgePayload,
+  apiKey: string
+): Promise<JudgeVerdict> {
   const { data, mimeType } = extractImageData(payload.image);
   const approxBytes = Math.floor((data.length * 3) / 4);
   const overallStart = Date.now();
@@ -173,7 +180,7 @@ async function callGeminiJudge(payload: JudgePayload, apiKey: string): Promise<J
     bytes: approxBytes,
     threshold: PASS_SCORE_THRESHOLD,
   } as const;
-const prompt = buildGeminiPrompt(payload);
+  const prompt = buildGeminiPrompt(payload);
 
   const client = getGeminiClient(apiKey);
 
@@ -209,7 +216,7 @@ const prompt = buildGeminiPrompt(payload);
               ],
             },
           ],
-        }),
+        })
       );
 
       console.info("[judge] Gemini responded", {
@@ -224,7 +231,8 @@ const prompt = buildGeminiPrompt(payload);
       const parsed = interpretGeminiResponse(rawText);
 
       const score = clampScore(parsed.score ?? 0);
-      const explanationText = parsed.explanation?.slice(0, 120) || buildFallbackExplanation(rawText);
+      const explanationText =
+        parsed.explanation?.slice(0, 120) || buildFallbackExplanation(rawText);
       const verdict = score >= PASS_SCORE_THRESHOLD ? "pass" : "fail";
 
       console.info("[judge] Gemini result", {
@@ -267,7 +275,9 @@ const prompt = buildGeminiPrompt(payload);
         });
 
         if (attempt >= GEMINI_MAX_RETRIES) {
-          throw error instanceof Error ? error : new Error("Gemini judge failed");
+          throw error instanceof Error
+            ? error
+            : new Error("Gemini judge failed");
         }
       }
 
@@ -285,12 +295,13 @@ const prompt = buildGeminiPrompt(payload);
 }
 
 function buildGeminiPrompt(payload: JudgePayload): string {
-  return `You judge whether a webcam snapshot matches the emoji ${payload.emoji}.
+  return `You judge whether a webcam snapshot matches the emoji ${
+    payload.emoji
+  }.
 Emoji description: ${payload.description ?? "(none provided)"}.
 Return strict JSON array with a single element like [{"score": number between 0 and 1 with two decimals, "explanation": under 20 words describing match quality}].
 Do not include backticks or prose. A higher score means closer resemblance.`;
 }
-
 
 type GeminiClientStore = {
   client?: GoogleGenAI;
@@ -316,7 +327,11 @@ function getGeminiClient(apiKey: string): GoogleGenAI {
 }
 
 function configureGlobalProxy() {
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
 
   if (!proxyUrl) {
     return;
@@ -358,11 +373,14 @@ function interpretGeminiResponse(text: string): GeminiJson {
   }
 
   const scoreMatch = /"score"\s*:\s*([-+]?[0-9]*\.?[0-9]+)/i.exec(trimmed);
-  const explanationMatch = /"explanation"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i.exec(trimmed);
+  const explanationMatch =
+    /"explanation"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i.exec(trimmed);
 
   return {
     score: scoreMatch ? Number.parseFloat(scoreMatch[1]) : undefined,
-    explanation: explanationMatch ? JSON.parse(`"${explanationMatch[1]}"`) : undefined,
+    explanation: explanationMatch
+      ? JSON.parse(`"${explanationMatch[1]}"`)
+      : undefined,
   };
 }
 
@@ -377,7 +395,9 @@ function buildFallbackExplanation(rawText: string): string {
 }
 
 function extractImageData(dataUrl: string): { data: string; mimeType: string } {
-  const match = /^data:(?<mime>[^;]+);base64,(?<data>[A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  const match = /^data:(?<mime>[^;]+);base64,(?<data>[A-Za-z0-9+/=]+)$/.exec(
+    dataUrl
+  );
 
   if (match?.groups?.data && match.groups.mime) {
     return {
@@ -400,8 +420,10 @@ function clampScore(score: number): number {
 }
 
 async function extractTextFromGeminiResult(result: unknown): Promise<string> {
-  const candidateResponse = (result as { response?: GeminiGenerateResponse }).response;
-  const body: GeminiGenerateResponse | undefined = candidateResponse ?? (result as GeminiGenerateResponse);
+  const candidateResponse = (result as { response?: GeminiGenerateResponse })
+    .response;
+  const body: GeminiGenerateResponse | undefined =
+    candidateResponse ?? (result as GeminiGenerateResponse);
 
   if (!body) {
     return "";
