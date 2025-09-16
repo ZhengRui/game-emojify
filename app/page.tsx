@@ -32,6 +32,9 @@ type SuccessEntry = {
   createdAt: number;
 };
 
+const APP_ENVIRONMENT = process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV ?? "development";
+const IS_PRODUCTION_ENVIRONMENT = APP_ENVIRONMENT === "production";
+
 const EMOJI_PROMPTS: EmojiPrompt[] = [
   { id: "grinning", symbol: "😀", name: "Grinning Face", description: "Broad open smile showing upper teeth." },
   { id: "beaming", symbol: "😁", name: "Beaming Face", description: "Smiling eyes with a big toothy grin." },
@@ -110,7 +113,9 @@ export default function HomePage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [autoCapture, setAutoCapture] = useState(true);
+  const autoCaptureDefaultEnv = process.env.NEXT_PUBLIC_AUTO_CAPTURE_DEFAULT;
+  const initialAutoCapture = autoCaptureDefaultEnv ? autoCaptureDefaultEnv === "true" : false;
+  const [autoCapture, setAutoCapture] = useState(initialAutoCapture);
   const [successGallery, setSuccessGallery] = useState<SuccessEntry[]>([]);
 
   const currentEmoji = EMOJI_PROMPTS[currentEmojiIndex];
@@ -445,6 +450,7 @@ export default function HomePage() {
   const scorePercent = Math.round(scoreValue * 100);
   const isPositive = judgeState.stage === "pass";
   const successCount = successGallery.length;
+  const showAutoCaptureToggle = !IS_PRODUCTION_ENVIRONMENT;
 
   return (
     <main className="layout">
@@ -476,9 +482,11 @@ export default function HomePage() {
           <button type="button" onClick={handleCameraToggle} className="secondary-button">
             {cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
           </button>
-          <button type="button" onClick={handleAutoCaptureToggle} className="secondary-button" disabled={!cameraEnabled}>
-            {autoCapture ? "Disable Auto Capture" : "Enable Auto Capture"}
-          </button>
+          {showAutoCaptureToggle && (
+            <button type="button" onClick={handleAutoCaptureToggle} className="secondary-button" disabled={!cameraEnabled}>
+              {autoCapture ? "Disable Auto Capture" : "Enable Auto Capture"}
+            </button>
+          )}
           {!autoCapture && (
             <button
               type="button"
