@@ -25,6 +25,13 @@ type EmojiPrompt = {
   description: string;
 };
 
+type SuccessEntry = {
+  id: string;
+  image: string;
+  emoji: EmojiPrompt;
+  createdAt: number;
+};
+
 const EMOJI_PROMPTS: EmojiPrompt[] = [
   { id: "grinning", symbol: "😀", name: "Grinning Face", description: "Broad open smile showing upper teeth." },
   { id: "beaming", symbol: "😁", name: "Beaming Face", description: "Smiling eyes with a big toothy grin." },
@@ -84,6 +91,7 @@ const CAMERA_INITIAL_DELAY = 800;
 const MAX_CAPTURE_WIDTH = 640;
 const MAX_CAPTURE_HEIGHT = 480;
 const CAPTURE_IMAGE_QUALITY = 0.85;
+const SUCCESS_GALLERY_LIMIT = 16;
 
 export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -103,6 +111,7 @@ export default function HomePage() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [autoCapture, setAutoCapture] = useState(true);
+  const [successGallery, setSuccessGallery] = useState<SuccessEntry[]>([]);
 
   const currentEmoji = EMOJI_PROMPTS[currentEmojiIndex];
   const nextEmoji = useMemo(
@@ -168,36 +177,73 @@ export default function HomePage() {
     return canvasElement.toDataURL("image/jpeg", CAPTURE_IMAGE_QUALITY);
   }, []);
 
-  const callJudge = useCallback(async (image: string, emoji: EmojiPrompt, roundId: string): Promise<JudgeApiResponse> => {
-    const response = await fetch("/api/judge", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        roundId,
-        emoji: emoji.symbol,
-        description: `${emoji.name}: ${emoji.description}`,
-        image,
-      }),
-    });
+const callJudge = useCallback(async (image: string, emoji: EmojiPrompt, roundId: string): Promise<JudgeApiResponse> => {
+  const response = await fetch("/api/judge", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      roundId,
+      emoji: emoji.symbol,
+      description: `${emoji.name}: ${emoji.description}`,
+      image,
+    }),
+  });
 
-    const result = (await response.json()) as Partial<JudgeApiResponse> & { status?: string };
+  const result = (await response.json()) as Partial<JudgeApiResponse> & { status?: string };
 
-    const status = result.status === "error" ? "error" : "ok";
-    const verdict = result.verdict === "pass" ? "pass" : "fail";
-    const score =
-      typeof result.score === "number"
-        ? result.score
-        : typeof result.confidence === "number"
-          ? result.confidence
-          : undefined;
+  const status = result.status === "error" ? "error" : "ok";
+  const verdict = result.verdict === "pass" ? "pass" : "fail";
+  const score =
+    typeof result.score === "number"
+      ? result.score
+      : typeof result.confidence === "number"
+        ? result.confidence
+        : undefined;
 
-    return {
-      status,
-      verdict,
-      explanation: result.explanation,
-      confidence: score,
-      score,
-    };
+  return {
+    status,
+    verdict,
+    explanation: result.explanation,
+    confidence: score,
+    score,
+  };
+}, []);
+
+  const createCompositeImage = useCallback(async (snapshot: string, emoji: EmojiPrompt) => {
+    try {
+      const baseImage = await loadImage(snapshot);
+      const emojiPaneWidth = Math.round(baseImage.width * 0.35);
+      const canvas = document.createElement("canvas");
+      canvas.width = baseImage.width + emojiPaneWidth;
+      canvas.height = baseImage.height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        return snapshot;
+      }
+
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(baseImage, 0, 0, baseImage.width, baseImage.height);
+
+      const gradient = ctx.createLinearGradient(baseImage.width, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, "#0f1e3a");
+      gradient.addColorStop(1, "#1a3370");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(baseImage.width, 0, emojiPaneWidth, canvas.height);
+
+      ctx.fillStyle = "#f8fafc";
+      const emojiSize = Math.round(Math.min(emojiPaneWidth * 0.8, canvas.height * 0.8));
+      ctx.font = `${emojiSize}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(emoji.symbol, baseImage.width + emojiPaneWidth / 2, canvas.height / 2);
+
+      return canvas.toDataURL("image/png");
+    } catch (error) {
+      console.error("Failed to create composite image", error);
+      return snapshot;
+    }
   }, []);
 
   const captureAndJudge = useCallback(async () => {
@@ -221,7 +267,7 @@ export default function HomePage() {
 
     const roundId = crypto.randomUUID();
     setCapturedImage(snapshot);
-      setJudgeState((prev) => ({ stage: "judging", message: prev.message }));
+    setJudgeState((prev) => ({ stage: "judging", message: prev.message }));
     judgeInFlightRef.current = true;
 
     try {
@@ -237,6 +283,13 @@ export default function HomePage() {
       }
 
       if (result.status === "ok" && result.verdict === "pass") {
+        const compositeImage = await createCompositeImage(snapshot, currentEmoji);
+        setSuccessGallery((entries) =>
+          [
+            { id: roundId, image: compositeImage, emoji: currentEmoji, createdAt: Date.now() },
+            ...entries,
+          ].slice(0, SUCCESS_GALLERY_LIMIT),
+        );
         setJudgeState({ stage: "pass", message, score });
         celebrationActiveRef.current = true;
         setShowCelebration(true);
@@ -255,7 +308,7 @@ export default function HomePage() {
     } finally {
       judgeInFlightRef.current = false;
     }
-  }, [callJudge, captureFrame, clearScheduledCapture, currentEmoji, scheduleCapture]);
+  }, [callJudge, captureFrame, clearScheduledCapture, currentEmoji, createCompositeImage, scheduleCapture]);
 
   useEffect(() => {
     celebrationActiveRef.current = showCelebration;
@@ -391,6 +444,7 @@ export default function HomePage() {
   const scoreValue = Math.min(Math.max(judgeState.score ?? lastScore, 0), 1);
   const scorePercent = Math.round(scoreValue * 100);
   const isPositive = judgeState.stage === "pass";
+  const successCount = successGallery.length;
 
   return (
     <main className="layout">
@@ -484,6 +538,53 @@ export default function HomePage() {
       )}
 
       <canvas ref={canvasRef} className="capture-canvas" aria-hidden="true" />
+
+      {successGallery.length > 0 && (
+        <aside className="success-gallery" aria-label="Successful matches">
+          <div className="gallery-track">
+            {successGallery.map((entry) => (
+              <figure key={entry.id} className="gallery-card">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={entry.image} alt={`Successful match for ${entry.emoji.name}`} />
+                <button
+                  type="button"
+                  className="gallery-download"
+                  onClick={() => {
+                    const link = document.createElement("a");
+                    link.href = entry.image;
+                    link.download = `${entry.emoji.name.replace(/\s+/g, "-").toLowerCase()}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  aria-label={`Download composite for ${entry.emoji.name}`}
+                >
+                  ⬇︎
+                </button>
+                <figcaption>
+                  <span className="gallery-emoji" role="img" aria-label={entry.emoji.name}>
+                    {entry.emoji.symbol}
+                  </span>
+                  <span className="gallery-name">{entry.emoji.name}</span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+          <div className="gallery-counter" role="status" aria-live="polite">
+            <span className="gallery-counter-value">{successCount}</span>
+            <span className="gallery-counter-label">matches</span>
+          </div>
+        </aside>
+      )}
     </main>
   );
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }
