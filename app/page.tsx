@@ -35,6 +35,18 @@ type SuccessEntry = {
 const APP_ENVIRONMENT = process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV ?? "development";
 const IS_PRODUCTION_ENVIRONMENT = APP_ENVIRONMENT === "production";
 
+const PASS_SCORE_THRESHOLD = (() => {
+  const rawValue = process.env.NEXT_PUBLIC_JUDGE_MIN_SCORE;
+  if (!rawValue) {
+    return 0.8;
+  }
+  const parsed = Number.parseFloat(rawValue);
+  if (Number.isNaN(parsed)) {
+    return 0.8;
+  }
+  return Math.min(Math.max(parsed, 0), 1);
+})();
+
 const EMOJI_PROMPTS: EmojiPrompt[] = [
   { id: "grinning", symbol: "😀", name: "Grinning Face", description: "Broad open smile showing upper teeth." },
   { id: "beaming", symbol: "😁", name: "Beaming Face", description: "Smiling eyes with a big toothy grin." },
@@ -451,6 +463,7 @@ export default function HomePage() {
   const isPositive = judgeState.stage === "pass";
   const successCount = successGallery.length;
   const showAutoCaptureToggle = !IS_PRODUCTION_ENVIRONMENT;
+  const passTargetPercent = Math.round(PASS_SCORE_THRESHOLD * 100);
 
   return (
     <main className="layout">
@@ -504,6 +517,10 @@ export default function HomePage() {
               className={`score-fill ${isPositive ? "score-fill-pass" : "score-fill-fail"}`}
               style={{ width: `${scorePercent}%` }}
             />
+            <div className="score-threshold" style={{ left: `${PASS_SCORE_THRESHOLD * 100}%` }}>
+              <span className="score-threshold-label">{passTargetPercent}% to pass</span>
+              <span className="score-threshold-line" aria-hidden="true" />
+            </div>
           </div>
           <div className="score-meta">
             <span className="score-label">{scorePercent}%</span>
